@@ -44,6 +44,7 @@ static POTENTIAL_HTTP_CODES: &[&str] = &["403"];
 async fn process_urls_concurrently(url: &str, wordlist: &str, thread_count: usize) -> Result<(), Box<dyn Error>> {
     if let Ok(lines) = read_lines(wordlist) {
         // Create a stream of tasks with a concurrency limit for our threads variable
+        // Reference: https://gendignoux.com/blog/2021/04/01/rust-async-streams-futures-part1.html
         let tasks = futures::stream::iter(
             lines.flatten().map(|line| {
                 let final_url = url.to_string() + &line;
