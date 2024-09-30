@@ -1,8 +1,10 @@
 use std::io;
+use std::env;
 
-use tasklist;
+
 
 pub mod users;
+pub mod process;
 
 // Reference: https://crates.io/crates/tasklist
 
@@ -14,6 +16,7 @@ fn main() -> io::Result<()> {
     println!("Select an option:");
     println!("\t1. Get local process list");
     println!("\t2. Get local users");
+    println!("\t3. Get current user's groups");
 
     io::stdin().read_line(&mut user_choice)?;
 
@@ -21,7 +24,7 @@ fn main() -> io::Result<()> {
 
     match user_choice.as_str().trim() {
         "1" => {
-            let local_processes = get_local_processes();
+            let local_processes = process::get_local_processes();
             println!("{}", local_processes);
         }
         "2" => {
@@ -29,7 +32,27 @@ fn main() -> io::Result<()> {
                 Ok(users) => {
                     println!("Local users:");
                     for user in users {
-                        println!("\t{}", user);
+                        // Need to fix this, it panics at the moment.
+                        // Likely something to do with checking for the admin group
+                        let local_groups = crate::users::get_user_groups(&user).unwrap();
+                        if local_groups.iter().any(|g| g.contains("Administrators")) {
+                            println!("\t{} (Admin)", user);
+                        } else {
+                            println!("\t{}", user);
+                        }
+                        
+                    }
+                }
+                Err(err) => eprintln!("Error: {}", err),
+            }
+        }
+        "3" => {
+            let current_user = env::var("USERNAME").unwrap();
+            match crate::users::get_user_groups(&current_user) {
+                Ok(groups) => {
+                    println!("Groups for user {}:", current_user);
+                    for group in groups {
+                        println!("\t{}", group);
                     }
                 }
                 Err(err) => eprintln!("Error: {}", err),
@@ -41,17 +64,5 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn get_local_processes() -> String {
-    unsafe {
-        let tl = tasklist::Tasklist::new();
-        let mut formatted_task_string = String::new();
 
-        // The formatting for the 2nd column is off no matter what I do, will try to fix later
-        for i in tl {
-            formatted_task_string += &format!("{:<10}|{:<20}|{:<30.30}|\n", i.get_pid(), i.get_pname(), i.get_user());
-        }
-
-        formatted_task_string
-    }
-}
 
