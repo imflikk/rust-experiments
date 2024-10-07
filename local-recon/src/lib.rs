@@ -1,6 +1,4 @@
 
-pub mod users;
-
 pub fn decode_wide_nul_to_string(
     ptr_wide_string: *mut u16,
 ) -> Result<String, std::string::FromUtf16Error> {

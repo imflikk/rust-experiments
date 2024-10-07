@@ -7,7 +7,7 @@ use windows::{
 };
 use std::ptr::null_mut;
 
-
+// This is the same function as in the other files.  Can't get it loaded from lib.rs for some reason
 fn decode_wide_nul_to_string(ptr_wide_string: *mut u16) -> Result<String, std::string::FromUtf16Error> {
     let mut decoded_string = Vec::<u16>::new();
     let mut i = 0;
@@ -46,12 +46,14 @@ pub fn get_services() {
                 if buffer_size > 0 { Some(&mut buffer) } else { None },
                 &mut bytes_needed,
                 &mut services_returned,
-                Some(&mut resume_handle),
+                Some(&mut resume_handle), // This expects an Option type, so it needs to be wrapped in Some()
                 PCWSTR::null(),
             );
 
             if result.is_err() {
                 let error = result.unwrap_err();
+                // Check for the error "More data is available", if so reallocate buffer
+                // This errors when not doing this check
                 if error.code() == HRESULT(0x800700EAu32 as i32) {
                     // More data is available, reallocate buffer
                     buffer_size = bytes_needed as usize;
@@ -68,6 +70,7 @@ pub fn get_services() {
                 );
 
                 for service in services {
+                    // TODO: Add checks for service access and check for unquoted service paths
                     let service_name = decode_wide_nul_to_string(service.lpServiceName.0).unwrap();
                     let display_name = decode_wide_nul_to_string(service.lpDisplayName.0).unwrap();
                     println!("Service Name: {}, Display Name: {}", service_name, display_name);
