@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 tasklist = "0.2.15"
-windows = "0.58.0"
+windows = { version = "0.58.0", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_NetworkManagement", "Win32_System_Services"] }
+get_if_addrs = "0.5"

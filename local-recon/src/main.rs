@@ -5,6 +5,8 @@ use std::env;
 
 pub mod users;
 pub mod process;
+pub mod networking;
+pub mod services;
 
 // Reference: https://crates.io/crates/tasklist
 // Test for git
@@ -20,6 +22,8 @@ fn main() -> io::Result<()> {
     println!("\t3. Get current user's groups");
     println!("\t4. Get a specific user's groups");
     println!("\t5. Get members of a specific group");
+    println!("\t6. Get local IP addresses");
+    println!("\t7. Get a list of services");
 
     io::stdin().read_line(&mut user_choice)?;
 
@@ -98,6 +102,20 @@ fn main() -> io::Result<()> {
                 }
                 Err(err) => eprintln!("Error: {} (Group likely doesn't exist)", err),
             }
+        }
+        "6" => {
+            match crate::networking::get_local_ip_addresses() {
+                Ok(ip_addresses) => {
+                    println!("Local IP addresses (IPv4 only):");
+                    for ip in ip_addresses {
+                        println!("\t{}", ip);
+                    }
+                }
+                Err(err) => eprintln!("Error: {}", err),
+            }
+        }
+        "7" => {
+            crate::services::get_services();
         }
         _ => println!("Invalid choice"),
     }
