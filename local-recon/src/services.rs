@@ -1,11 +1,12 @@
 use windows::{
     core::{PCWSTR, HRESULT},
     Win32::System::Services::{
-        EnumServicesStatusExW, OpenSCManagerW, CloseServiceHandle, SC_ENUM_PROCESS_INFO, SC_MANAGER_ENUMERATE_SERVICE,
-        SERVICE_WIN32, SERVICE_STATE_ALL, ENUM_SERVICE_STATUS_PROCESSW, 
+        EnumServicesStatusExW, OpenSCManagerW, CloseServiceHandle, OpenServiceW, QueryServiceConfigW, SC_ENUM_PROCESS_INFO, SC_MANAGER_ENUMERATE_SERVICE,
+        SERVICE_WIN32, SERVICE_STATE_ALL, ENUM_SERVICE_STATUS_PROCESSW, SERVICE_CHANGE_CONFIG, SERVICE_QUERY_CONFIG, QUERY_SERVICE_CONFIGW,
     },
 };
-use std::ptr::null_mut;
+
+use colored::Colorize;
 
 // This is the same function as in the other files.  Can't get it loaded from lib.rs for some reason
 fn decode_wide_nul_to_string(ptr_wide_string: *mut u16) -> Result<String, std::string::FromUtf16Error> {
@@ -69,17 +70,85 @@ pub fn get_services() {
                     services_returned as usize,
                 );
 
+                println!("{:<40} | {:<70} | {:<10} | {:<6} | {}", "Service Name", "Display Name", "Can Modify", "Unquoted", "Binary Path");
+                println!("{}", "-".repeat(160));
                 for service in services {
-                    // TODO: Add checks for service access and check for unquoted service paths
                     let service_name = decode_wide_nul_to_string(service.lpServiceName.0).unwrap();
                     let display_name = decode_wide_nul_to_string(service.lpDisplayName.0).unwrap();
-                    println!("Service Name: {}, Display Name: {}", service_name, display_name);
+                    
+                    // Check if the current user has access to modify the service
+                    let service_handle_result = OpenServiceW(
+                        scm_handle,
+                        PCWSTR(service.lpServiceName.0),
+                        SERVICE_CHANGE_CONFIG,
+                    );
+
+                    let can_modify = match service_handle_result {
+                        Ok(service_handle) => {
+                            let _ = CloseServiceHandle(service_handle);
+                            true
+                        }
+                        Err(_) => false,
+                    };
+
+                    // Open the service to query its configuration
+                    let service_handle_result = OpenServiceW(
+                        scm_handle,
+                        PCWSTR(service.lpServiceName.0),
+                        SERVICE_QUERY_CONFIG,
+                    );
+
+                    let bin_path = match service_handle_result {
+                        Ok(service_handle) => {
+                            // Query the service configuration
+                            let mut bytes_needed = 0;
+                            let _ = QueryServiceConfigW(service_handle, None, 0, &mut bytes_needed);
+                            let mut config_buffer = vec![0u8; bytes_needed as usize];
+                            let success = QueryServiceConfigW(
+                                service_handle,
+                                Some(config_buffer.as_mut_ptr() as *mut QUERY_SERVICE_CONFIGW),
+                                bytes_needed,
+                                &mut bytes_needed,
+                            );
+
+                            let bin_path = if success.is_ok() {
+                                let config = &*(config_buffer.as_ptr() as *const QUERY_SERVICE_CONFIGW);
+                                decode_wide_nul_to_string(config.lpBinaryPathName.0).unwrap()
+                            } else {
+                                "Unknown".to_string()
+                            };
+                            let _ = CloseServiceHandle(service_handle);
+                            bin_path
+                        }
+                        Err(_) => "Unknown".to_string(),
+                    };
+
+                    let mut bin_path_unquoted = false;
+                    // Check for unquoted service paths meeting the following criteria
+                    // 1. The path does not contain quotes
+                    // 2. The path contains a space
+                    // 3. The space does not come after the first appearance of .exe
+                    if !bin_path.contains('"') && bin_path.contains(' ') {
+                        let exe_index = bin_path.to_lowercase().find(".exe");
+                        let space_index = bin_path.find(' ');
+
+                        // If space comes before .exe, then it's part of the initiating path
+                        if space_index < exe_index {
+                            bin_path_unquoted = true;
+                        }
+                    }
+                    
+                    if can_modify || bin_path_unquoted {
+                        println!("{:<40} | {:<70} | {:<10} | {:<6} | {}", service_name.green(), display_name.green(), can_modify.to_string().green(), bin_path_unquoted.to_string().green(), bin_path.green());
+                    } else {
+                        println!("{:<40} | {:<70} | {:<10} | {:<6} | {}", service_name, display_name, can_modify, bin_path_unquoted, bin_path);
+                    }
                 }
                 break;
             }
         }
 
         // Close the service control manager handle
-        CloseServiceHandle(scm_handle);
+        let _ = CloseServiceHandle(scm_handle);
     }
 }
