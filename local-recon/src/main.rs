@@ -1,4 +1,5 @@
 use std::io;
+use std::io::Write;
 use std::env;
 
 
@@ -25,7 +26,9 @@ fn main() -> io::Result<()> {
     println!("\t7. Get a list of services");
     println!("\t8. Create new local user");
     println!("\t9. Delete local user");
+    print!("\nEnter your choice: ");
 
+    io::stdout().flush().unwrap();
     io::stdin().read_line(&mut user_choice)?;
 
     user_choice = user_choice.to_string();
