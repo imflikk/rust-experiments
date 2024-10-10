@@ -9,7 +9,6 @@ pub mod networking;
 pub mod services;
 
 // Reference: https://crates.io/crates/tasklist
-// Test for git
 
 
 fn main() -> io::Result<()> {
@@ -24,6 +23,8 @@ fn main() -> io::Result<()> {
     println!("\t5. Get members of a specific group");
     println!("\t6. Get local IP addresses");
     println!("\t7. Get a list of services");
+    println!("\t8. Create new local user");
+    println!("\t9. Delete local user");
 
     io::stdin().read_line(&mut user_choice)?;
 
@@ -116,6 +117,35 @@ fn main() -> io::Result<()> {
         }
         "7" => {
             crate::services::get_services();
+        }
+        "8" => {
+            println!("Enter a username: ");
+            let mut username = String::new();
+            io::stdin().read_line(&mut username)?;
+            let username = username.trim();
+            
+            println!("Enter a password: ");
+            let mut password = String::new();
+            io::stdin().read_line(&mut password)?;
+            let password = password.trim();
+
+            let result = crate::users::create_local_user(username, password);
+            match result {
+                Ok(_) => println!("User {} created successfully", username),
+                Err(err) => eprintln!("Error: {}", err),
+            }
+        }
+        "9" => {
+            println!("Enter a username: ");
+            let mut username = String::new();
+            io::stdin().read_line(&mut username)?;
+            let username = username.trim();
+
+            let result = crate::users::delete_local_user(username);
+            match result {
+                Ok(_) => println!("User {} deleted successfully", username),
+                Err(err) => eprintln!("Error: {}", err),
+            }
         }
         _ => println!("Invalid choice"),
     }

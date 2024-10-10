@@ -1,8 +1,8 @@
 use std::ptr::null_mut;
-use windows::core::PCWSTR;
-use windows::Win32::NetworkManagement::NetManagement::{NERR_Success, NetUserEnum, NetUserGetLocalGroups, NetLocalGroupGetMembers, 
+use windows::core::{PCWSTR, PWSTR};
+use windows::Win32::NetworkManagement::NetManagement::{NERR_Success, NetUserEnum, NetUserAdd, NetUserDel, NetUserGetLocalGroups, NetLocalGroupGetMembers, 
     FILTER_NORMAL_ACCOUNT, MAX_PREFERRED_LENGTH, USER_INFO_0, LG_INCLUDE_INDIRECT, LOCALGROUP_USERS_INFO_0,
-    LOCALGROUP_MEMBERS_INFO_2,
+    LOCALGROUP_MEMBERS_INFO_2, USER_INFO_1, USER_PRIV_USER, UF_SCRIPT,
 };
 
 // Can't get this to work from lib.rs for some reason
@@ -38,8 +38,8 @@ pub fn get_local_users() -> Result<Vec<String>, u32> {
 
     unsafe {
         let rc = NetUserEnum(
-            None,
-            level,
+            None, // local machine
+            level, // 0 means only account names
             FILTER_NORMAL_ACCOUNT,
             &mut buf_ptr,
             MAX_PREFERRED_LENGTH,
@@ -132,6 +132,7 @@ pub fn get_members_of_group(group_name: &str) -> Result<Vec<String>, u32> {
             return Err(rc);
         }
 
+        // Check if there are no members, otherwise it will panic at an empty slice
         if entries_read == 0 {
             return Ok(Vec::new());
         } else {
@@ -142,6 +143,7 @@ pub fn get_members_of_group(group_name: &str) -> Result<Vec<String>, u32> {
         }
     };
 
+    // Loop through the members returned and decode into a printable string
     let mut members = Vec::<String>::with_capacity(members_slice.len());
     for member in members_slice {
         
@@ -155,4 +157,51 @@ pub fn get_members_of_group(group_name: &str) -> Result<Vec<String>, u32> {
     Ok(members)
 }
 
+// Reference: https://stackoverflow.com/questions/70409981/windows-add-user-by-rust
+pub fn create_local_user(username: &str, password: &str) -> Result<(), u32> {
+    let wide_username_nul = encode_string_to_wide(username);
+    let wide_password_nul = encode_string_to_wide(password);
 
+    // Build USER_INFO_1 struct and cast inputs to PWSTR
+    let mut user = USER_INFO_1 {
+        usri1_name: PWSTR(wide_username_nul.as_ptr() as *mut u16),
+        usri1_password: PWSTR(wide_password_nul.as_ptr() as *mut u16),
+        usri1_priv: USER_PRIV_USER,
+        usri1_password_age: 0,
+        usri1_home_dir: PWSTR::null(),
+        usri1_comment: PWSTR::null(),
+        usri1_flags: UF_SCRIPT,
+        usri1_script_path: PWSTR::null(),
+    };
+
+    unsafe {
+        let rc = NetUserAdd(
+            None, // None means local machine
+            1, // this tells it to use the USER_INFO_1 struct
+            &mut user as *mut _ as _, // Do some weird type casting to get to the pointer type required
+            Some(null_mut()),
+        );
+
+        if rc != NERR_Success {
+            return Err(rc);
+        }
+    }
+    Ok(())
+}
+
+// https://learn.microsoft.com/en-us/windows/win32/api/lmaccess/nf-lmaccess-netuserdel
+pub fn delete_local_user(username: &str) -> Result<(), u32> {
+    let wide_username_nul = encode_string_to_wide(username);
+
+    unsafe {
+        let rc = NetUserDel(
+            None,
+            PWSTR(wide_username_nul.as_ptr() as *mut u16),
+        );
+
+        if rc != NERR_Success {
+            return Err(rc);
+        }
+    }
+    Ok(())
+}
